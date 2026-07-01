@@ -9,7 +9,7 @@
   "scripts": {
     "dev:web": "npm run dev -w apps/web",
     "dev:api": "npm run start:dev -w apps/api",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run prisma:generate && npm run build --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate -w packages/database"
   }
 }
