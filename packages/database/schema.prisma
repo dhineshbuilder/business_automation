@@ -1,0 +1,211 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  memberships   Member[]
+  apiKeys       ApiKey[]
+
+  @@index([email])
+}
+
+model Workspace {
+  id            String         @id @default(uuid())
+  name          String
+  slug          String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  members       Member[]
+  whatsappAccts WhatsAppAccount[]
+  contacts      Contact[]
+  workflows     Workflow[]
+}
+
+model Member {
+  id            String         @id @default(uuid())
+  userId        String
+  workspaceId   String
+  role          Role           @default(AGENT)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  LEAD
+  AGENT
+  AUDITOR
+}
+
+model WhatsAppAccount {
+  id            String         @id @default(uuid())
+  workspaceId   String
+  phoneNumberId String         @unique // Meta Phone Number ID
+  wabaId        String         // WhatsApp Business Account ID
+  verifyToken   String
+  accessToken   String
+  numberStatus  String         @default("ACTIVE")
+  qualityRating String         @default("HIGH")
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  templates     MessageTemplate[]
+  broadcasts    Broadcast[]
+
+  @@index([workspaceId])
+  @@index([phoneNumberId])
+}
+
+model Contact {
+  id            String         @id @default(uuid())
+  workspaceId   String
+  phoneNumber   String         // E.164 format
+  firstName     String?
+  lastName      String?
+  email         String?
+  tags          String[]       // Indexed array
+  customFields  Json?
+  createdAt     DateTime       @default(now())
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([workspaceId, phoneNumber])
+  @@index([workspaceId, phoneNumber])
+}
+
+model Conversation {
+  id                String         @id @default(uuid())
+  whatsAppAccountId String
+  contactId         String
+  assignedToId      String?        // Member ID
+  lastMessageAt     DateTime       @default(now())
+  unreadCount       Int            @default(0)
+  status            ConvStatus     @default(OPEN)
+  createdAt         DateTime       @default(now())
+  
+  whatsAppAccount   WhatsAppAccount @relation(fields: [whatsAppAccountId], references: [id])
+  contact           Contact         @relation(fields: [contactId], references: [id])
+  messages          Message[]
+
+  @@index([whatsAppAccountId, status])
+  @@index([contactId])
+  @@index([lastMessageAt(sort: Desc)])
+}
+
+enum ConvStatus {
+  OPEN
+  RESOLVED
+  SNOOZED
+}
+
+model Message {
+  id             String         @id @default(uuid())
+  conversationId String
+  senderType     SenderType     // CUSTOMER, AGENT, SYSTEM, AI
+  messageType    MsgType        @default(TEXT)
+  body           String?
+  mediaUrl       String?
+  messageSid     String?        @unique // Meta Message ID
+  status         MessageStatus  @default(SENT)
+  createdAt      DateTime       @default(now())
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt(sort: Desc)])
+}
+
+enum SenderType {
+  CUSTOMER
+  AGENT
+  SYSTEM
+  AI
+}
+
+enum MsgType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOCATION
+  TEMPLATE
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model MessageTemplate {
+  id                String         @id @default(uuid())
+  whatsAppAccountId String
+  name              String
+  category          String
+  language          String
+  status            String         // APPROVED, PENDING, REJECTED
+  bodyPattern       String
+  whatsAppAccount   WhatsAppAccount @relation(fields: [whatsAppAccountId], references: [id])
+
+  @@unique([whatsAppAccountId, name, language])
+}
+
+model Broadcast {
+  id                String         @id @default(uuid())
+  whatsAppAccountId String
+  name              String
+  status            BroadcastStatus @default(DRAFT)
+  scheduledAt       DateTime?
+  sentCount         Int            @default(0)
+  deliveredCount    Int            @default(0)
+  readCount         Int            @default(0)
+  failedCount       Int            @default(0)
+  createdAt         DateTime       @default(now())
+  whatsAppAccount   WhatsAppAccount @relation(fields: [whatsAppAccountId], references: [id])
+
+  @@index([whatsAppAccountId, status])
+}
+
+enum BroadcastStatus {
+  DRAFT
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Workflow {
+  id          String         @id @default(uuid())
+  workspaceId String
+  name        String
+  isActive    Boolean        @default(false)
+  triggerType String
+  graphJson   Json
+  createdAt   DateTime       @default(now())
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+}
+
+model ApiKey {
+  id          String         @id @default(uuid())
+  userId      String
+  name        String
+  hashedKey   String         @unique
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id])
+}
