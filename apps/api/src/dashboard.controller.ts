@@ -30,7 +30,7 @@ export class DashboardController {
         },
       });
 
-      const logs = recentMessages.map((msg) => ({
+      const logs = recentMessages.map((msg: any) => ({
         id: msg.id,
         event: msg.senderType === "AI" ? "AI Auto-Reply sent" : "Message logged",
         detail: msg.body ? `"${msg.body.substring(0, 30)}..."` : "Media asset",
